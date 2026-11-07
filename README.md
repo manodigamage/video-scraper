@@ -72,7 +72,22 @@ python -m lecturenotes.cli --save-key --api-key sk-ant-...
 ```bash
 python -m lecturenotes.cli my_lecture.mp4 -o my_lecture.pptx
 python -m lecturenotes.cli my_lecture.mp4 --cheap     # Haiku only (cheapest)
+
+# optional: give it the lecturer's own slides/notes for higher accuracy
+python -m lecturenotes.cli my_lecture.mp4 -m slides.pdf
+python -m lecturenotes.cli my_lecture.mp4 -m deck.pptx
 ```
+
+### Optional reference materials
+
+If you have the lecturer's actual slides or notes (`.pdf` or `.pptx`), pass them
+with `-m/--materials`. Each video keyframe is matched to the best source slide
+by text overlap; a confident match supplies **clean, authoritative text** (no
+OCR guesswork) and a **crisp source image** instead of a video screenshot.
+Handwritten annotations still come from the video. It's fully optional — omit it
+and the tool works from the video alone. *(Rendering `.pptx` to images needs
+LibreOffice on PATH; without it, PPTX still contributes authoritative text and
+the tool falls back to video frames for images.)*
 
 Intermediate files (full transcript, extracted keyframes, notes JSON) are kept
 next to the output for inspection.

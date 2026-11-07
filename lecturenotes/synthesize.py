@@ -29,7 +29,10 @@ _SECTION_TEMPLATE = """Here is one segment of a lecture.
 
 ON-SCREEN TYPE: {kind}
 
-PRINTED/SLIDE TEXT:
+AUTHORITATIVE SLIDE/NOTE TEXT (from the lecturer's own uploaded materials; trust this over OCR when present):
+{source}
+
+PRINTED/SLIDE TEXT (read from the video frame):
 {printed}
 
 HANDWRITTEN / BOARD TEXT:
@@ -107,6 +110,7 @@ def _synthesize_section(client, section: Section, cfg: Config) -> list[SlideNote
         return []
     prompt = _SECTION_TEMPLATE.format(
         kind=ex.kind.value,
+        source=section.source_text or "(no uploaded materials matched)",
         printed=ex.printed_text or "(none)",
         handwriting=ex.handwriting_text or "(none)",
         diagram=ex.diagram_description or "(none)",
@@ -121,8 +125,14 @@ def _synthesize_section(client, section: Section, cfg: Config) -> list[SlideNote
     )
     data = _parse_json("".join(b.text for b in resp.content if b.type == "text"))
 
-    embed = section.keyframe.image_path if ex.kind in (
-        FrameKind.SLIDE, FrameKind.ANNOTATED_SLIDE, FrameKind.WHITEBOARD) else None
+    # prefer the crisp source-slide image when we have a confident match;
+    # otherwise embed the video keyframe for visual content.
+    if section.source_image_path:
+        embed = section.source_image_path
+    elif ex.kind in (FrameKind.SLIDE, FrameKind.ANNOTATED_SLIDE, FrameKind.WHITEBOARD):
+        embed = section.keyframe.image_path
+    else:
+        embed = None
 
     slides: list[SlideNote] = []
     for i, s in enumerate(data.get("slides", []) or []):

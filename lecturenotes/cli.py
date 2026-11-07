@@ -17,6 +17,7 @@ from .config import load_config, save_api_key
 from .pipeline import run_pipeline
 
 _STAGE_LABEL = {
+    "materials": "Loading reference materials",
     "ingest": "Extracting audio",
     "transcribe": "Transcribing (local GPU)",
     "frames": "Scanning for slides/board changes",
@@ -43,6 +44,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("video", nargs="?", help="input video file")
     ap.add_argument("-o", "--output", help="output .pptx path")
     ap.add_argument("-c", "--config", help="optional TOML config file")
+    ap.add_argument("-m", "--materials",
+                    help="optional lecturer slides/notes (.pdf or .pptx) for accuracy")
     ap.add_argument("--api-key", help="Anthropic API key (else env/keyring)")
     ap.add_argument("--cheap", action="store_true",
                     help="Haiku only, disable Sonnet escalation")
@@ -70,8 +73,10 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"Input : {video}")
     print(f"Output: {out}\n")
+    if args.materials:
+        print(f"Materials: {args.materials}")
     t0 = time.time()
-    result = run_pipeline(video, out, cfg, progress=_progress)
+    result = run_pipeline(video, out, cfg, materials_path=args.materials, progress=_progress)
     dt = time.time() - t0
 
     print(f"\n{len(result.slides)} slides + {len(result.admin)} admin items "

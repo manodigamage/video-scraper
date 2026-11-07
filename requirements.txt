@@ -6,6 +6,7 @@ imagehash>=4.3
 Pillow>=10.0
 python-pptx>=0.6.23
 ffmpeg-python>=0.2
+PyMuPDF>=1.24          # read/render optional PDF (and converted PPTX) materials
 
 # Optional: secure local storage of the API key
 keyring>=24.0

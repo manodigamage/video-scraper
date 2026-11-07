@@ -12,7 +12,8 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Callable, Optional
 
-from . import align, build_pptx, frames, ingest, synthesize, transcribe, vision
+from . import align, build_pptx, frames, ingest, materials as materials_mod
+from . import synthesize, transcribe, vision
 from .config import Config
 from .models import LectureResult
 
@@ -27,6 +28,7 @@ def run_pipeline(
     video_path: str | Path,
     output_pptx: str | Path,
     cfg: Config,
+    materials_path: Optional[str | Path] = None,
     progress: Optional[ProgressCb] = None,
 ) -> LectureResult:
     progress = progress or _noop
@@ -37,6 +39,13 @@ def run_pipeline(
     work = Path(cfg.workdir) if cfg.workdir else Path(
         tempfile.mkdtemp(prefix="lecturenotes_", dir=output_pptx.parent))
     work.mkdir(parents=True, exist_ok=True)
+
+    # --- optional: load the lecturer's reference materials ---
+    materials = None
+    if materials_path:
+        progress("materials", 0.0)
+        materials = materials_mod.load_materials(materials_path, work)
+        progress("materials", 1.0)
 
     # --- stage 1: ingest ---
     progress("ingest", 0.0)
@@ -62,6 +71,15 @@ def run_pipeline(
     # --- stage 5: align ---
     progress("align", 0.0)
     sections = align.build_sections(keyframes, extractions, transcript)
+    # attach authoritative source slides from materials, if any matched
+    if materials:
+        for sec in sections:
+            slide, score = materials_mod.best_match(
+                sec.extraction.printed_text or sec.extraction.handwriting_text,
+                materials, cfg.materials_match_threshold)
+            if slide:
+                sec.source_text = slide.text
+                sec.source_image_path = slide.image_path
     progress("align", 1.0)
 
     # --- stage 6: synthesize + admin scan ---

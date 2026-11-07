@@ -46,6 +46,9 @@ class Config:
     min_state_seconds: float = 3.0      # ignore flickers shorter than this
     image_max_dim: int = 1568           # longest edge sent to the vision model (px)
 
+    # --- optional reference materials (lecturer's slides/notes) ---
+    materials_match_threshold: float = 0.30  # min token-coverage to trust a slide match
+
     # --- misc ---
     workdir: Optional[str] = None       # scratch dir; None => temp dir next to output
     keep_intermediates: bool = True     # keep transcript + frames beside the pptx

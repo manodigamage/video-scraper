@@ -58,6 +58,9 @@ class Section:
     spoken_text: str
     start: float
     end: float
+    # optional: authoritative source slide/page matched from uploaded materials
+    source_text: str = ""            # clean text from the lecturer's own slide/notes
+    source_image_path: Optional[str] = None  # crisp source slide image, if available
 
 
 @dataclass
