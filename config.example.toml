@@ -1,0 +1,25 @@
+# Copy to config.toml and pass with --config. All keys are optional;
+# defaults live in lecturenotes/config.py.
+
+[api]
+# api_key is normally taken from the ANTHROPIC_API_KEY env var or the OS
+# keyring, not written here. Only uncomment if you must:
+# api_key = "sk-ant-..."
+workhorse_model = "claude-haiku-5-5"      # cheap workhorse; verify ID in the Console
+escalation_model = "claude-sonnet-5-5"    # used only for hard frames
+allow_escalation = true                    # false = Haiku only (cheapest)
+max_api_concurrency = 8
+
+[transcription]
+# whisper_model = "large-v3"   # leave unset to auto-pick by GPU VRAM
+# whisper_language = "en"      # leave unset to autodetect
+compute_type = "float16"
+
+[frames]
+sample_fps = 1.0
+phash_distance_threshold = 6
+min_state_seconds = 3.0
+image_max_dim = 1568
+
+[misc]
+keep_intermediates = true

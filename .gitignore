@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# Local config / secrets
+config.toml
+.env
+*.key
+
+# Work artifacts / media (don't commit lectures or outputs)
+*.mp4
+*.mkv
+*.mov
+*.wav
+*.pptx
+lecturenotes_*/
+_sampled/
+keyframes/
+outputs/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
