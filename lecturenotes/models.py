@@ -70,6 +70,7 @@ class SlideNote:
     continued: bool = False             # True => "(cont.)" overflow slide
     image_path: Optional[str] = None    # keyframe image to embed, if any
     note: str = ""                      # optional free-text block (e.g. board diagram desc)
+    table: Optional[list[list[str]]] = None  # optional 2+ column table (stats/params)
 
 
 @dataclass

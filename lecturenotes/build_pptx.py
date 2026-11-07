@@ -1,19 +1,17 @@
-"""Stage 7: render slide notes + admin appendix into a polished .pptx (FR11).
+"""Stage 7: render slide notes + admin appendix into a clean .pptx (FR11).
 
-The deck is authored natively (not a patched screenshot): each content slide
-has a styled title, an accent bar, the embedded lecture image, and clean notes.
-All colors live in THEME so the look is easy to retune.
+Priorities: clarity and readability. No decorative accent bar, no overlapping
+footer. Content is paginated deterministically so nothing overflows the slide,
+and tabular data (stats / parameter grids) renders as a real table.
 """
-from __future__ import annotations
-
+import math
 import tempfile
 from pathlib import Path
 
 from pptx import Presentation
-from pptx.util import Inches, Pt, Emu
+from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
-from pptx.enum.shapes import MSO_SHAPE
 
 from .models import AdminItem, SlideNote
 
@@ -22,20 +20,46 @@ _SLIDE_H = Inches(7.5)
 
 
 class THEME:
-    PRIMARY = RGBColor(0x4F, 0x46, 0xE5)       # indigo accent
-    PRIMARY_DARK = RGBColor(0x31, 0x2E, 0x81)
-    ADMIN = RGBColor(0xD9, 0x77, 0x06)         # amber accent for logistics
-    ADMIN_DARK = RGBColor(0x92, 0x4D, 0x05)
-    INK = RGBColor(0x1F, 0x29, 0x37)           # body text
-    MUTED = RGBColor(0x6B, 0x72, 0x80)         # secondary text
-    HAIRLINE = RGBColor(0xE5, 0xE7, 0xEB)
-    WHITE = RGBColor(0xFF, 0xFF, 0xFF)
-    TITLE_BG = RGBColor(0xF5, 0xF3, 0xFF)      # faint tint for title slide
+    PRIMARY = RGBColor(0x31, 0x2E, 0x81)       # title indigo
+    ADMIN = RGBColor(0x92, 0x4D, 0x05)         # admin amber
+    INK = RGBColor(0x1F, 0x29, 0x37)
+    MUTED = RGBColor(0x6B, 0x72, 0x80)
+    HAIRLINE = RGBColor(0xD1, 0xD5, 0xDB)
+    HEADER_BG = RGBColor(0xEE, 0xED, 0xFE)
+    TITLE_BG = RGBColor(0xF5, 0xF3, 0xFF)
+
+# layout constants
+_BODY_PT = 15
+_NOTE_PT = 12
+# rough chars-per-line and line-capacity for each column type (kept conservative)
+_RIGHT_CPL, _RIGHT_LINES = 46, 15          # notes column beside an image
+_FULL_CPL, _FULL_LINES = 105, 18           # full-width notes column
 
 
-def _prep_image(path: str) -> str:
-    """Trim near-black letterbox borders (common on screen recordings) so the
-    embedded frame fills its space. Returns a path (original if trimming fails)."""
+def _blank(prs):
+    return prs.slides.add_slide(prs.slide_layouts[6])
+
+
+def _para(tf, runs, first, size, color, bold=False, space=6):
+    p = tf.paragraphs[0] if first else tf.add_paragraph()
+    p.space_after = Pt(space)
+    r = p.add_run()
+    r.text = runs
+    r.font.size = Pt(size)
+    r.font.color.rgb = color
+    r.font.bold = bold
+    return p
+
+
+def _title(slide, text, continued=False, color=None):
+    color = color or THEME.PRIMARY
+    box = slide.shapes.add_textbox(Inches(0.55), Inches(0.35), Inches(12.3), Inches(0.95))
+    tf = box.text_frame
+    tf.word_wrap = True
+    _para(tf, text + ("  (cont.)" if continued else ""), True, 26, color, bold=True)
+
+
+def _prep_image(path):
     try:
         from PIL import Image, ImageChops
         im = Image.open(path).convert("RGB")
@@ -52,131 +76,139 @@ def _prep_image(path: str) -> str:
     return path
 
 
-def _blank(prs):
-    return prs.slides.add_slide(prs.slide_layouts[6])
+def _lines_for(text, cpl):
+    return max(1, math.ceil(len(text) / cpl))
 
 
-def _rect(slide, left, top, width, height, color, line=None):
-    shp = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, left, top, width, height)
-    shp.fill.solid()
-    shp.fill.fore_color.rgb = color
-    if line is None:
-        shp.line.fill.background()
-    else:
-        shp.line.color.rgb = line
-        shp.line.width = Pt(0.75)
-    shp.shadow.inherit = False
-    return shp
+def _paginate(items, has_image):
+    """items: list of (text, muted). Split into pages that fit. The first page
+    uses the narrower notes column when an image is present; the rest are full
+    width."""
+    pages = []
+    idx = 0
+    first = True
+    while idx < len(items):
+        if first and has_image:
+            cpl, cap = _RIGHT_CPL, _RIGHT_LINES
+        else:
+            cpl, cap = _FULL_CPL, _FULL_LINES
+        used, page = 0, []
+        while idx < len(items):
+            text, muted = items[idx]
+            need = _lines_for(text, cpl) + 1          # +1 for inter-bullet gap
+            if page and used + need > cap:
+                break
+            page.append(items[idx])
+            used += need
+            idx += 1
+        pages.append(page)
+        first = False
+    return pages or [[]]
 
 
-def _text(slide, left, top, width, height, runs, align=PP_ALIGN.LEFT,
-          anchor=MSO_ANCHOR.TOP):
-    """runs: list of paragraphs; each paragraph is list of (text,size,color,bold)."""
+def _bullets_box(slide, items, left, top, width, height):
     box = slide.shapes.add_textbox(left, top, width, height)
     tf = box.text_frame
     tf.word_wrap = True
-    tf.vertical_anchor = anchor
-    for i, para in enumerate(runs):
-        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
-        p.alignment = align
-        p.space_after = Pt(6)
-        for (t, size, color, bold) in para:
-            r = p.add_run()
-            r.text = t
-            r.font.size = Pt(size)
-            r.font.color.rgb = color
-            r.font.bold = bold
-    return box
+    first = True
+    for text, muted in items:
+        _para(tf, ("" if muted else "•  ") + text, first,
+              _NOTE_PT if muted else _BODY_PT,
+              THEME.MUTED if muted else THEME.INK)
+        first = False
 
 
-def _accent_bar(slide, color):
-    _rect(slide, 0, 0, Inches(0.22), _SLIDE_H, color)
-
-
-def _footer(slide, title, number):
-    _text(slide, Inches(0.5), Inches(7.02), Inches(9), Inches(0.4),
-          [[(title, 9, THEME.MUTED, False)]])
-    _text(slide, Inches(12.0), Inches(7.02), Inches(1.0), Inches(0.4),
-          [[(str(number), 9, THEME.MUTED, False)]], align=PP_ALIGN.RIGHT)
+def _add_table(slide, rows, left, top, width):
+    nrows = len(rows)
+    ncols = max(len(r) for r in rows)
+    height = Inches(0.34 * nrows)
+    gfx = slide.shapes.add_table(nrows, ncols, left, top, width, height)
+    tbl = gfx.table
+    for i, row in enumerate(rows):
+        for j in range(ncols):
+            cell = tbl.cell(i, j)
+            cell.text = str(row[j]) if j < len(row) else ""
+            cell.margin_top = Pt(2)
+            cell.margin_bottom = Pt(2)
+            for p in cell.text_frame.paragraphs:
+                for r in p.runs:
+                    r.font.size = Pt(12)
+                    r.font.bold = (i == 0)
+                    r.font.color.rgb = THEME.PRIMARY if i == 0 else THEME.INK
+    return 0.34 * nrows
 
 
 def _title_slide(prs, title):
     slide = _blank(prs)
-    _rect(slide, 0, 0, _SLIDE_W, _SLIDE_H, THEME.TITLE_BG)
-    _rect(slide, 0, Inches(2.55), _SLIDE_W, Inches(0.12), THEME.PRIMARY)
-    _text(slide, Inches(1.0), Inches(2.75), Inches(11.3), Inches(1.4),
-          [[(title, 44, THEME.PRIMARY_DARK, True)]], anchor=MSO_ANCHOR.MIDDLE)
-    _text(slide, Inches(1.0), Inches(4.15), Inches(11.3), Inches(0.6),
-          [[("Lecture notes — generated from the recording", 18, THEME.MUTED, False)]])
+    bg = slide.shapes.add_shape  # fill background via a rectangle
+    from pptx.enum.shapes import MSO_SHAPE
+    rect = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, _SLIDE_W, _SLIDE_H)
+    rect.fill.solid(); rect.fill.fore_color.rgb = THEME.TITLE_BG
+    rect.line.fill.background(); rect.shadow.inherit = False
+    box = slide.shapes.add_textbox(Inches(1.0), Inches(2.9), Inches(11.3), Inches(1.6))
+    tf = box.text_frame; tf.word_wrap = True; tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+    _para(tf, title, True, 40, THEME.PRIMARY, bold=True)
+    _para(tf, "Lecture notes — generated from the recording", False, 16, THEME.MUTED)
 
 
-def _bullets_para(bullets):
-    return [[("•  " + b, 16, THEME.INK, False)] for b in bullets]
-
-
-def _content_slide(prs, note, title, number):
-    slide = _blank(prs)
-    _accent_bar(slide, THEME.PRIMARY)
-
-    heading = note.title + "  (cont.)" if note.continued else note.title
-    _text(slide, Inches(0.55), Inches(0.35), Inches(12.3), Inches(0.9),
-          [[(heading, 28, THEME.PRIMARY_DARK, True)]])
-    _rect(slide, Inches(0.6), Inches(1.2), Inches(3.2), Pt(3), THEME.PRIMARY)
+def _content_slides(prs, note: SlideNote):
+    """Emit one or more slides for a single note, paginating to avoid overflow."""
+    items = [(b, False) for b in note.bullets if b.strip()]
+    if note.note:
+        items.append((note.note, True))
 
     has_image = bool(note.image_path) and Path(note.image_path).exists()
-    if has_image:
-        try:
-            pic = slide.shapes.add_picture(
-                _prep_image(note.image_path), Inches(0.55), Inches(1.5), width=Inches(6.5))
-            pic.line.color.rgb = THEME.HAIRLINE
-            pic.line.width = Pt(1)
-        except Exception:
-            has_image = False
+    img = _prep_image(note.image_path) if has_image else None
 
-    if has_image:
-        _text(slide, Inches(7.35), Inches(1.45), Inches(5.45), Inches(5.3),
-              _bullets_para(note.bullets))
-        if note.note:
-            _text(slide, Inches(0.55), Inches(6.35), Inches(6.5), Inches(0.6),
-                  [[(note.note, 12, THEME.MUTED, False)]])
-    else:
-        _text(slide, Inches(0.6), Inches(1.45), Inches(12.1), Inches(5.3),
-              _bullets_para(note.bullets))
-        if note.note:
-            _text(slide, Inches(0.6), Inches(6.35), Inches(12.1), Inches(0.5),
-                  [[(note.note, 12, THEME.MUTED, False)]])
-    _footer(slide, title, number)
+    # table (if any) lives on the first slide; bullets paginate around it
+    pages = _paginate(items, has_image)
+    for pi, page in enumerate(pages):
+        slide = _blank(prs)
+        _title(slide, note.title, continued=(pi > 0 or note.continued))
+
+        first_page = (pi == 0)
+        if first_page and has_image:
+            try:
+                slide.shapes.add_picture(img, Inches(0.55), Inches(1.5), width=Inches(6.5))
+            except Exception:
+                has_image = False
+            nx, nw = Inches(7.35), Inches(5.45)
+        else:
+            nx, nw = Inches(0.6), Inches(12.1)
+        ntop = Inches(1.45)
+
+        if first_page and note.table:
+            used_in = _add_table(slide, note.table, nx, ntop, nw)
+            ntop = Inches(1.45 + used_in + 0.25)
+
+        _bullets_box(slide, page, nx, ntop, nw, Inches(7.0) - ntop)
 
 
-def _admin_slides(prs, admin, title, start_number):
+def _admin_slides(prs, admin):
     if not admin:
-        return start_number
-    by_cat: dict[str, list[str]] = {}
+        return
+    by_cat = {}
     for it in admin:
         by_cat.setdefault(it.category, []).append(it.text)
+    items = []
+    for cat, rows in by_cat.items():
+        items.append((cat.upper(), True))
+        items.extend((r, False) for r in rows)
 
-    paras: list[list[tuple]] = []
-    for cat, items in by_cat.items():
-        paras.append([(cat.upper(), 15, THEME.ADMIN_DARK, True)])
-        for it in items:
-            paras.append([("•  " + it, 15, THEME.INK, False)])
-
-    number = start_number
-    chunk = 11
-    first = True
-    for i in range(0, len(paras), chunk):
+    pages = _paginate(items, has_image=False)
+    for pi, page in enumerate(pages):
         slide = _blank(prs)
-        _accent_bar(slide, THEME.ADMIN)
-        head = "Announcements & Admin" + ("  (cont.)" if not first else "")
-        first = False
-        _text(slide, Inches(0.55), Inches(0.35), Inches(12.3), Inches(0.9),
-              [[(head, 28, THEME.ADMIN_DARK, True)]])
-        _rect(slide, Inches(0.6), Inches(1.2), Inches(3.2), Pt(3), THEME.ADMIN)
-        _text(slide, Inches(0.6), Inches(1.5), Inches(12.1), Inches(5.3),
-              paras[i:i + chunk])
-        _footer(slide, title, number)
-        number += 1
-    return number
+        _title(slide, "Announcements & Admin", continued=(pi > 0), color=THEME.ADMIN)
+        # render: muted items are category headers (amber, bold)
+        box = slide.shapes.add_textbox(Inches(0.6), Inches(1.5), Inches(12.1), Inches(5.3))
+        tf = box.text_frame; tf.word_wrap = True
+        first = True
+        for text, is_header in page:
+            if is_header:
+                _para(tf, text, first, 15, THEME.ADMIN, bold=True)
+            else:
+                _para(tf, "•  " + text, first, 15, THEME.INK)
+            first = False
 
 
 def build_pptx(title, slides, admin, out_path):
@@ -186,11 +218,9 @@ def build_pptx(title, slides, admin, out_path):
     prs.slide_height = _SLIDE_H
 
     _title_slide(prs, title)
-    n = 1
     for note in slides:
-        _content_slide(prs, note, title, n)
-        n += 1
-    _admin_slides(prs, admin, title, n)
+        _content_slides(prs, note)
+    _admin_slides(prs, admin)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     prs.save(str(out_path))
