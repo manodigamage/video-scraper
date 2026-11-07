@@ -1,12 +1,33 @@
 """Stage 2: transcribe audio locally with faster-whisper (GPU)."""
 from __future__ import annotations
 
+import subprocess
 import time
 from pathlib import Path
 from typing import Callable, Optional
 
 from .config import Config
 from .models import TranscriptSegment
+
+
+def _cuda_available() -> bool:
+    """Detect a usable CUDA GPU via CTranslate2 (faster-whisper's backend) —
+    no torch needed."""
+    try:
+        import ctranslate2  # type: ignore
+        return ctranslate2.get_cuda_device_count() > 0
+    except Exception:
+        return False
+
+
+def _gpu_vram_gb() -> float:
+    try:
+        out = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+            text=True, stderr=subprocess.DEVNULL)
+        return max(int(x.strip()) for x in out.splitlines() if x.strip()) / 1024.0
+    except Exception:
+        return 0.0
 
 
 def _load_model(model_name: str, device: str, compute: str, attempts: int = 3):
@@ -26,22 +47,19 @@ def _load_model(model_name: str, device: str, compute: str, attempts: int = 3):
         f"a network/VPN/firewall issue. Last error: {last}")
 
 
-def _pick_model_by_vram(explicit: Optional[str]) -> str:
+def _pick_model_by_vram(explicit: Optional[str], has_cuda: bool) -> str:
     if explicit:
         return explicit
-    try:
-        import torch  # type: ignore
-        if torch.cuda.is_available():
-            gb = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
-            if gb >= 10:
-                return "large-v3"
-            if gb >= 6:
-                return "distil-large-v3"
+    if has_cuda:
+        gb = _gpu_vram_gb()
+        if gb >= 10:
+            return "large-v3"
+        if gb >= 6:
+            return "distil-large-v3"
+        if gb >= 4:
             return "medium"
-    except Exception:
-        pass
-    # CPU / unknown: smaller, still decent
-    return "small"
+        return "small"
+    return "small"  # CPU fallback
 
 
 def transcribe(
@@ -50,17 +68,18 @@ def transcribe(
     progress: Optional[Callable[[float], None]] = None,
 ) -> list[TranscriptSegment]:
     """Return full timestamped transcript. Runs on GPU if available."""
-    model_name = _pick_model_by_vram(cfg.whisper_model)
+    has_cuda = _cuda_available()
+    model_name = _pick_model_by_vram(cfg.whisper_model, has_cuda)
 
-    device, compute = "cuda", cfg.compute_type
-    try:
-        import torch  # type: ignore
-        if not torch.cuda.is_available():
-            device, compute = "cpu", "int8"
-    except Exception:
-        device, compute = "cpu", "int8"
-
-    model = _load_model(model_name, device, compute)
+    model = None
+    if has_cuda:
+        try:
+            model = _load_model(model_name, "cuda", cfg.compute_type)
+        except Exception:
+            model = None  # CUDA libs not set up right -> fall back to CPU
+    if model is None:
+        model_name = cfg.whisper_model or "small"
+        model = _load_model(model_name, "cpu", "int8")
 
     segments_iter, info = model.transcribe(
         str(audio_path),

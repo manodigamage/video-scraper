@@ -1,6 +1,7 @@
 # Core pipeline
 anthropic>=0.40
 faster-whisper>=1.0
+av>=11,<14          # PyAV: v14+ drops the metadata_errors arg faster-whisper calls
 opencv-python-headless>=4.9
 imagehash>=4.3
 Pillow>=10.0
