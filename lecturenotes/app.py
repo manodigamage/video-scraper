@@ -62,7 +62,16 @@ class PipelineWorker(QThread):
                 progress=lambda s, f: self.progress.emit(s, f))
             self.done.emit(str(self._out), len(res.slides), len(res.admin))
         except Exception as e:
-            self.failed.emit(f"{e}\n\n{traceback.format_exc()}")
+            tb = traceback.format_exc()
+            print(tb, file=sys.stderr)  # full detail in the terminal
+            log_note = ""
+            try:
+                logp = Path(self._out).with_name("lecturenotes_error.log")
+                logp.write_text(tb, encoding="utf-8")
+                log_note = f"\n\nFull details saved to:\n{logp}"
+            except Exception:
+                pass
+            self.failed.emit(f"{e}{log_note}\n\n{tb}")
 
 
 class DropFrame(QFrame):
