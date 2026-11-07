@@ -8,6 +8,9 @@ python-pptx>=0.6.23
 ffmpeg-python>=0.2
 PyMuPDF>=1.24          # read/render optional PDF (and converted PPTX) materials
 
+# Desktop app
+PySide6>=6.6
+
 # Optional: secure local storage of the API key
 keyring>=24.0
 
@@ -15,6 +18,3 @@ keyring>=24.0
 # libraries it needs (cuBLAS + cuDNN). On most setups:
 #   pip install nvidia-cublas-cu12 nvidia-cudnn-cu12
 # and ensure ffmpeg is on PATH (not a pip package — install via your OS / conda).
-
-# Desktop app (Phase 3) — added later:
-# PySide6>=6.6

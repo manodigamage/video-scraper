@@ -9,9 +9,9 @@ Runs locally on your machine. Transcription happens on your **NVIDIA GPU** for
 free; a small number of calls to the **Claude API** read the on-screen content
 and write the notes.
 
-> Status: **Phase 1 — core CLI pipeline.** The native desktop app (PySide6)
-> comes in Phase 3. Code is written but not yet validated on real hardware —
-> the first run on a sample lecture is the calibration step.
+> Status: **core pipeline + desktop app built.** Code is validated on synthetic
+> data (CLI stages and the GUI), but not yet run on a real lecture with a GPU +
+> API key — the first real run is the calibration step.
 
 ---
 
@@ -67,7 +67,19 @@ export ANTHROPIC_API_KEY=sk-ant-...
 python -m lecturenotes.cli --save-key --api-key sk-ant-...
 ```
 
-## Run
+## Run — desktop app
+
+```bash
+python -m lecturenotes.app
+```
+
+A window opens: drag your lecture video in (or Browse), optionally add the
+lecturer's slides/notes, paste your API key once (Save stores it in your system
+keyring), and hit Start. Progress shows per stage; when it finishes, Open deck /
+Open folder buttons appear. The run happens on a background thread so the window
+stays responsive.
+
+## Run — command line
 
 ```bash
 python -m lecturenotes.cli my_lecture.mp4 -o my_lecture.pptx
