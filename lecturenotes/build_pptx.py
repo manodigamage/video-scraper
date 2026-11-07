@@ -6,6 +6,7 @@ All colors live in THEME so the look is easy to retune.
 """
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 
 from pptx import Presentation
@@ -30,6 +31,25 @@ class THEME:
     HAIRLINE = RGBColor(0xE5, 0xE7, 0xEB)
     WHITE = RGBColor(0xFF, 0xFF, 0xFF)
     TITLE_BG = RGBColor(0xF5, 0xF3, 0xFF)      # faint tint for title slide
+
+
+def _prep_image(path: str) -> str:
+    """Trim near-black letterbox borders (common on screen recordings) so the
+    embedded frame fills its space. Returns a path (original if trimming fails)."""
+    try:
+        from PIL import Image, ImageChops
+        im = Image.open(path).convert("RGB")
+        gray = im.convert("L")
+        diff = ImageChops.difference(gray, Image.new("L", gray.size, 0))
+        bbox = diff.point(lambda p: 255 if p > 18 else 0).getbbox()
+        if bbox and (bbox[2] - bbox[0]) > im.width * 0.3 \
+                and (bbox[3] - bbox[1]) > im.height * 0.3:
+            out = Path(tempfile.gettempdir()) / (Path(path).stem + "_trim.jpg")
+            im.crop(bbox).save(out, quality=88)
+            return str(out)
+    except Exception:
+        pass
+    return path
 
 
 def _blank(prs):
@@ -107,7 +127,7 @@ def _content_slide(prs, note, title, number):
     if has_image:
         try:
             pic = slide.shapes.add_picture(
-                note.image_path, Inches(0.55), Inches(1.5), width=Inches(6.5))
+                _prep_image(note.image_path), Inches(0.55), Inches(1.5), width=Inches(6.5))
             pic.line.color.rgb = THEME.HAIRLINE
             pic.line.width = Pt(1)
         except Exception:

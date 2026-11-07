@@ -125,14 +125,15 @@ def _synthesize_section(client, section: Section, cfg: Config) -> list[SlideNote
     )
     data = _parse_json("".join(b.text for b in resp.content if b.type == "text"))
 
-    # prefer the crisp source-slide image when we have a confident match;
-    # otherwise embed the video keyframe for visual content.
-    if section.source_image_path:
-        embed = section.source_image_path
-    elif ex.kind in (FrameKind.SLIDE, FrameKind.ANNOTATED_SLIDE, FrameKind.WHITEBOARD):
-        embed = section.keyframe.image_path
+    # The VIDEO frame is what shows the lecturer's handwriting/annotations, so
+    # prefer it. Use the clean source-slide image only for a plain printed slide
+    # with no annotations. Always fall back to the keyframe so content slides are
+    # never left imageless (even if the model hedged the frame kind as "other").
+    kf_img = section.keyframe.image_path or None
+    if ex.kind == FrameKind.SLIDE and section.source_image_path:
+        embed = section.source_image_path   # clean, un-annotated printed slide
     else:
-        embed = None
+        embed = kf_img                       # annotated / board / screen frame
 
     slides: list[SlideNote] = []
     for i, s in enumerate(data.get("slides", []) or []):
@@ -143,6 +144,18 @@ def _synthesize_section(client, section: Section, cfg: Config) -> list[SlideNote
             image_path=embed if i == 0 else None,  # embed image on the first slide only
             note=str(s.get("note", "")).strip(),
         ))
+
+    # Completeness guard: never drop a page that was actually on screen. If the
+    # model returned nothing but this state has a visual or any content, still
+    # emit one slide showing it so no captured page goes missing.
+    if not slides and (embed or section.spoken_text.strip()
+                       or ex.printed_text.strip() or ex.handwriting_text.strip()):
+        head = ex.printed_text.strip().splitlines()[0] if ex.printed_text.strip() else ""
+        body = [section.spoken_text.strip()] if section.spoken_text.strip() \
+            else ["(On-screen content — see image.)"]
+        slides = [SlideNote(title=(head[:60] or "Lecture content"),
+                            bullets=body, image_path=embed,
+                            note=ex.diagram_description or "")]
     return slides
 
 

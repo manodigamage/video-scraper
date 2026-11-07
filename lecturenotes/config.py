@@ -43,7 +43,7 @@ class Config:
     # --- frame sampling / dedup ---
     sample_fps: float = 1.0             # how often to look at the video (frames/sec)
     phash_distance_threshold: int = 6   # <= this hamming distance => "same" visual state
-    min_state_seconds: float = 3.0      # ignore flickers shorter than this
+    min_state_seconds: float = 2.0      # ignore flickers shorter than this
     image_max_dim: int = 1568           # longest edge sent to the vision model (px)
 
     # --- optional reference materials (lecturer's slides/notes) ---
