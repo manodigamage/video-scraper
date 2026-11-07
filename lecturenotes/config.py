@@ -40,10 +40,15 @@ class Config:
     whisper_language: Optional[str] = None  # None => autodetect
     compute_type: str = "float16"       # faster-whisper compute type on GPU
 
-    # --- frame sampling / dedup ---
+    # --- frame sampling / state detection ---
     sample_fps: float = 1.0             # how often to look at the video (frames/sec)
-    phash_distance_threshold: int = 6   # <= this hamming distance => "same" visual state
-    min_state_seconds: float = 2.0      # ignore flickers shorter than this
+    change_threshold: float = 0.30      # fraction-of-frame change above which a step
+                                        # is treated as a big abrupt slide switch
+    split_jaccard: float = 0.15         # OCR fingerprint similarity below which two
+                                        # frames are different pages (catches template twins)
+    ocr_interval_s: float = 6.0         # how often to OCR a frame for the fingerprint
+    max_ocr_samples: int = 400          # cap total OCR calls so long videos stay fast
+    min_state_seconds: float = 2.0      # ignore states briefer than this
     image_max_dim: int = 1568           # longest edge sent to the vision model (px)
 
     # --- optional reference materials (lecturer's slides/notes) ---
