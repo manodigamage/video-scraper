@@ -41,9 +41,18 @@ def _tokenize(text: str) -> frozenset[str]:
 
 # ---------- loaders ----------
 
+def _import_pymupdf():
+    try:
+        import pymupdf  # type: ignore
+        return pymupdf
+    except ImportError:
+        import fitz  # type: ignore  # older PyMuPDF
+        return fitz
+
+
 def _render_pdf_pages(pdf_path: Path, out_dir: Path, dpi: int = 150) -> list[tuple[str, Optional[str]]]:
     """Return (text, image_path) per page using PyMuPDF."""
-    import fitz  # PyMuPDF  # type: ignore
+    fitz = _import_pymupdf()
     out_dir.mkdir(parents=True, exist_ok=True)
     pages: list[tuple[str, Optional[str]]] = []
     with fitz.open(pdf_path) as doc:
