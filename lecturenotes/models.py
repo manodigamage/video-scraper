@@ -70,7 +70,6 @@ class SlideNote:
     continued: bool = False             # True => "(cont.)" overflow slide
     image_path: Optional[str] = None    # keyframe image to embed, if any
     note: str = ""                      # optional free-text block (e.g. board diagram desc)
-    table: Optional[list[list[str]]] = None  # optional 2+ column table (stats/params)
 
 
 @dataclass
@@ -86,4 +85,3 @@ class LectureResult:
     slides: list[SlideNote]
     admin: list[AdminItem]
     transcript: list[TranscriptSegment]
-    output_path: str = ""               # where the .pptx was actually saved

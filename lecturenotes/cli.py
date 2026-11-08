@@ -81,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"\n{len(result.slides)} slides + {len(result.admin)} admin items "
           f"in {dt/60:.1f} min")
-    print(f"Saved: {result.output_path or out}")
+    print(f"Saved: {out}")
     return 0
 
 

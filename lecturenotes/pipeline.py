@@ -91,11 +91,10 @@ def run_pipeline(
 
     # --- stage 7: build pptx ---
     progress("pptx", 0.0)
-    saved = build_pptx.build_pptx(title, slides, admin, output_pptx)
+    build_pptx.build_pptx(title, slides, admin, output_pptx)
     progress("pptx", 1.0)
 
-    result = LectureResult(title=title, slides=slides, admin=admin,
-                           transcript=transcript, output_path=str(saved))
+    result = LectureResult(title=title, slides=slides, admin=admin, transcript=transcript)
 
     if cfg.keep_intermediates:
         _dump_intermediates(work, result)

@@ -22,15 +22,7 @@ _SYS_SECTION = (
     "You combine what was SHOWN (slide/board text, diagrams, handwritten "
     "annotations) with what was SAID about it. You preserve every substantive "
     "detail, write clearly, and never invent facts. Content hard to read is "
-    "marked with '[unclear]'.\n"
-    "MATH: always use real Unicode math symbols, never spelled-out names — "
-    "α β γ δ ε θ λ μ ν π ρ σ τ φ ω Σ Π Δ ∇ √ ∞ ∂ ∫ ≈ ≠ ≤ ≥ ± × ÷ · ∈ ∉ ⊆ → ⇒, "
-    "subscripts ₀₁₂₃ᵢⱼₙ and superscripts ²³ⁿᵀ (write αᵢ, sⱼ, x², σ², x̄ for mean, "
-    "Σᵢ for sums). Put each equation on its own line/bullet, never inline in a "
-    "sentence with other equations.\n"
-    "STRUCTURE: never cram several values or parameters into one bullet — one "
-    "fact per bullet. When presenting a set of statistics or a parameter grid, "
-    "emit a 'table' (2+ columns) instead of bullets."
+    "marked with '[unclear]'."
 )
 
 _SECTION_TEMPLATE = """Here is one segment of a lecture.
@@ -58,10 +50,7 @@ WHAT THE LECTURER SAID DURING THIS SEGMENT:
 Produce study-note slides as JSON ONLY:
 {{
   "slides": [
-    {{"title": "short title",
-      "bullets": ["point", "..."],
-      "table": [["Statistic","Value"], ["count","150"]],   // optional; omit if not tabular
-      "note": "optional extra block e.g. diagram explanation"}}
+    {{"title": "short title", "bullets": ["point", "..."], "note": "optional extra block e.g. diagram explanation"}}
   ]
 }}
 
@@ -69,13 +58,8 @@ Rules:
 - Merge shown + said content. Attribute board/annotation content and spoken
   elaboration together so nothing is lost.
 - Keep bullets self-contained and detailed enough to study from without the video.
-- ONE fact per bullet. Never pack several values, parameters or stats into a
-  single bullet — split them, or use "table" (2+ columns) for stats / parameter
-  grids (e.g. GridSearch settings, describe() output).
-- Use real Unicode math symbols (α, σ, Σ, ≤, ×, subscripts, superscripts); put
-  each equation on its own bullet.
-- Keep each slide to ~6 bullets max. If there is more, split into multiple slide
-  objects; the renderer marks later ones "(cont.)" and also auto-paginates.
+- If there is too much for one readable slide (more than ~7 bullets), split into
+  multiple slide objects; keep each focused. The renderer marks later ones "(cont.)".
 - Do NOT include administrative items (assignments, exams, attendance, deadlines)
   here — those are collected separately.
 - If this segment has no instructional content, return {{"slides": []}}.
@@ -98,16 +82,6 @@ If there are none, return {{"items": []}}.
 
 TRANSCRIPT:
 {transcript}"""
-
-
-def _parse_table(tbl):
-    if not isinstance(tbl, list) or not tbl:
-        return None
-    rows = []
-    for r in tbl:
-        if isinstance(r, list):
-            rows.append([str(c).strip() for c in r])
-    return rows if len(rows) >= 2 else None
 
 
 def _parse_json(raw: str) -> dict:
@@ -169,7 +143,6 @@ def _synthesize_section(client, section: Section, cfg: Config) -> list[SlideNote
             continued=(i > 0),
             image_path=embed if i == 0 else None,  # embed image on the first slide only
             note=str(s.get("note", "")).strip(),
-            table=_parse_table(s.get("table")),
         ))
 
     # Completeness guard: never drop a page that was actually on screen. If the
