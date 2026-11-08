@@ -60,7 +60,7 @@ class PipelineWorker(QThread):
             res = run_pipeline(
                 self._video, self._out, self._cfg, materials_path=self._materials,
                 progress=lambda s, f: self.progress.emit(s, f))
-            self.done.emit(str(self._out), len(res.slides), len(res.admin))
+            self.done.emit(res.output_path or str(self._out), len(res.slides), len(res.admin))
         except Exception as e:
             tb = traceback.format_exc()
             print(tb, file=sys.stderr)  # full detail in the terminal

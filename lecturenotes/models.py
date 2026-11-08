@@ -86,3 +86,4 @@ class LectureResult:
     slides: list[SlideNote]
     admin: list[AdminItem]
     transcript: list[TranscriptSegment]
+    output_path: str = ""               # where the .pptx was actually saved

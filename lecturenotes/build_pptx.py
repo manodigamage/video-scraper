@@ -223,5 +223,14 @@ def build_pptx(title, slides, admin, out_path):
     _admin_slides(prs, admin)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    prs.save(str(out_path))
-    return out_path
+    try:
+        prs.save(str(out_path))
+        return out_path
+    except PermissionError:
+        # target is open/locked in another app (e.g. PowerPoint) — never lose
+        # the whole run; save under a timestamped name instead.
+        import time
+        alt = out_path.with_name(
+            f"{out_path.stem}-{time.strftime('%Y%m%d-%H%M%S')}{out_path.suffix}")
+        prs.save(str(alt))
+        return alt
